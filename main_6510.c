@@ -15,6 +15,7 @@ int main (int argc, char **argv)
     
     
 	int c;
+    uint16_t offset = 0;
 	bool debug = false;
 	char *input_file = NULL;
 	//char *output_file;
@@ -35,6 +36,7 @@ int main (int argc, char **argv)
                    {"debug",  no_argument, 0, 'd'},
                    {"file",  required_argument, 0, 'f'},
                    {"output", required_argument, 0, 'o'},
+                   {"offset", required_argument, 0, 's'},
                    {"help", no_argument, 0, 'h'},
                    { 0 }
             };
@@ -53,6 +55,11 @@ int main (int argc, char **argv)
 		case 'o':
 			//output_file = optarg;
 			break;
+        case 's':
+            offset = (uint16_t) strtoul(optarg, NULL, 10);
+            register_file.pcl = (uint8_t) offset;
+            register_file.pch = (uint8_t) offset>>8;
+            break;
 		case '?':
 			if(optopt == c)
 			{
