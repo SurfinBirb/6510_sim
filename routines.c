@@ -1,6 +1,13 @@
 #define _GNU_SOURCE
+#define MAXARGS 128
+#define LINELEN 256
 #include <getopt.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <argp.h>
+
 uint16_t pc(rf regs)
 {
     return ((regs.pch << 8) + regs.pcl);
@@ -86,62 +93,6 @@ void change_pc(rf *regs, uint16_t offset, bool sign)
     regs->pch = pc_reg >> 8;
     regs->pcl = pc_reg;
 }
-
-// int split (char *str, char c, char ***arr)
-// {
-//     int count = 1;
-//     int token_len = 1;
-//     int i = 0;
-//     char *p;
-//     char *t;
-// 
-//     p = str;
-//     while (*p != '\0')
-//     {
-//         if (*p == c)
-//         count++;
-//         p++;
-//     }
-// 
-//     *arr = (char**) malloc(sizeof(char*) * count);
-//     if (*arr == NULL) exit(1);
-// 
-//     p = str;
-//     while (*p != '\0')
-//     {
-//         if (*p == c)
-//         {
-//             (*arr)[i] = (char*) malloc(sizeof(char) * token_len);
-//             if ((*arr)[i] == NULL) exit(1);
-//             token_len = 0;
-//             i++;
-//         }
-//         p++;
-//         token_len++;
-//     }
-//     (*arr)[i] = (char*) malloc( sizeof(char) * token_len );
-//     if ((*arr)[i] == NULL) exit(1);
-// 
-//     i = 0;
-//     p = str;
-//     t = ((*arr)[i]);
-//     while (*p != '\0')
-//     {
-//         if (*p != c && *p != '\0')
-//         {
-//             *t = *p;
-//             t++;
-//         }
-//         else
-//         {
-//             *t = '\0';
-//             i++;
-//             t = ((*arr)[i]);
-//         }
-//         p++;
-//     }
-//   return count;
-// }
 
 void fetch(es *exec_s)
 {
@@ -259,278 +210,226 @@ void execute(es *exec_s)
     i.func(exec_s);
 }
 
+int bp = 1;
 bool brk[0x10000] = {0};
 
-/*
- * void wait_for_input()
- * {
- *    char *line;
- *    bool _continue = 0;
- *    int option_index = 0;
- *    do
- *    {
- *        printf("dbg> ");
- *        size_t len = 0;
- *        ssize_t nread;
- *        nread = getline(&line, &len, stdin);
- *        printf("Line: %s", line);
- *        if(nread == -1)
- *        {
- *            printf("Oi, something went wrong\n");
- *            exit(-1);
- *        }       
- *        char **av;
- *        int ac = split(line, ' ', &av);
- *        if('\n' != av[0][0])
- *        {
- *            int length = ac + 1;
- *            char **tmp = malloc((length)*sizeof(char*));
- *            tmp[0] = malloc(4*sizeof(char));
- *            for(int i = 1; i < length; i++)
- *            {
- *                tmp[i] = malloc(strlen(av[i-1]) + 1);
- *            }
- *            //tmp[ac-1] = malloc(sizeof(char));
- *            strcpy(tmp[0], "dbg");
- *            for(int i = 1; i < length; i++)
- *            {
- *                strcpy(tmp[i], av[i-1]);
- *            }
- *            //strcpy(tmp[ac-1], "");
- *            av = tmp;
- *            //optind = 0; // reset getopt
- *            //opterr = 1;
- *            int c = 0;
- *            av[length-1][strlen(av[length-1])-1] = '\0';
- *            uint16_t address;
- *            char *end_ptr = 0;
- *            printf("count = %d\n", ac);
- *            for(int i = 0; i <= ac; i++) printf("Arr: %s; length = %lu\n",av[i],strlen(av[i]));
- *            option_index = 0;
- *            static const struct option long_options[] = {
- *                   {"breakpoint",     required_argument, 0, 'b'},
- *                   {"delete",  required_argument, 0, 'd'},
- *                   {"ls",  no_argument, 0, 'l'},
- *                   {"continue", no_argument, 0, 'c'},
- *                   {"exit", no_argument, 0, 'e'},
- *                   {"help", no_argument, 0, 'h'},
- *                   {"run", no_argument, 0, 'r'},
- *                   {"",0,0,0}
- *            };
- *            printf("getopt = %d\n", getopt_long(length, av, "b:cd:ehlr", long_options, &option_index));
- *            while ((c = getopt_long(length, av, "b:cd:ehlr", long_options, &option_index)) != -1)
- *            {
- *                printf("%c", c);
- *                switch(c)
- *                {
- *                    case 'b': ;
- *                        printf("breakpoint set at %s", optarg);
- *                        address = (uint16_t) strtol(optarg, &end_ptr, 16);
- *                        if((end_ptr == optarg))
- *                        {
- *                            printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", optarg);
- *                        }
- *                        else brk[address] = true;               
- *                    break;
- *                    case 'c': ;
- *                    printf("c");
- *                        _continue = true;
- *                    break;
- *                    case 'd': ;
- *                    printf("breakpoint removed at %s", optarg);
- *                        address = (uint16_t) strtol(optarg, &end_ptr, 16);
- *                        if((end_ptr == optarg))
- *                        {
- *                            printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", optarg);
- *                        }
- *                        else brk[address] = false;
- *                    break;
- *                    case 'e': ;
- *                    printf("e");
- *                        exit(0);
- *                    break;
- *                    case 'h': ;
- *                    break;
- *                    case 'l': ;
- *                        printf("Breakpoint list: \n");
- *                        for(int i = 0x0000; i <= 0xFFFF; i++)
- *                        {
- *                            if(brk[i]) printf("0x%04X\n", i);
- *                        }
- *                    break;
- *                }
- *            }
- *        }
- *    } while (!_continue);
- * }
- */
-// const char *argp_program_version = "veersion";
-// const char *argp_program_bug_address = "<vak34@gmail.com>";
-// static char doc[] = "Description";
-// static char args_doc[] = "Doc";
-// static struct argp_option options[] = {
-//     {"breakpoint", 'b', "b_address", 0, "Set a breakpoint"},
-//     {"delete", 'd', "d_address", 0, "Delete breakpoint"},
-//     {"ls", 'l', 0, 0, "List of breakpoints"},
-//     {"continue", 'c', 0, 0, "Continue"},
-//     {"exit", 'e', 0, 0, "Exit"},
-//     {"help", 'h', 0, 0, "Show help"},
-//     {"run", 'r', 0, 0, "Run"},
-//     {0}
-// }
-// 
-// struct arguments {
-//     char *b_address;
-//     char *d_address;
-//     bool cont; 
-// }
-// 
-// static error_t parse_opt(int key, char *arg, struct argp_state *state) {
-//     struct arguments *arguments = state -> input;
-//     switch (key) {
-//     case 'b': arguments -> b_address = state -> b_address; break;
-//     case 'd': arguments -> d_address = state -> d_address; break;
-//     case 'c': arguments -> cont = true; break;
-//     case 'e': exit(0); break;
-//     
-//     case 'l':
-//         printf("Breakpoint list: \n");
-//         for(int i = 0x0000; i <= 0xFFFF; i++)
-//         {
-//             if(brk[i]) printf("0x%04X\n", i);
-//         }
-//     case ARGP_KEY_ARG: return 0;
-//     default: return ARGP_ERR_UNKNOWN;
-//     }   
-//     return 0;
-// }
-// 
-// static struct argp argp = { options, parse_opt, args_doc, doc, 0, 0, 0 };
-// 
-// void input_argp(void)
-// {
-//     char *line;
-//     bool _continue = 0;
-//     do
-//     {
-//         printf("dbg> ");
-//         size_t len = 0;
-//         ssize_t nread;
-//         nread = getline(&line, &len, stdin);
-//         printf("Line: %s", line);
-//     } while (!_continue)
-//     
-// }
-
-void comd_line_stub(char *line, int *bp, es exec_s)
+int getnonblank()
 {
-    uint16_t adr;
-    if(line[0] == 'l'  && line[1] == 's')
-    {
+	int ch;
+	for (;;) { 
+		ch  = getchar();
+		if (ch == '\n') break;
+		if (ch == EOF) break;
+		if (ch > ' ') break;
+	}
+	return ch;
+}
+
+int get_args( char * argv[], char line[] )
+{
+	int argc;
+	int len;
+	int ch;
+    argv[0] = "dbg";
+	len = 0;
+	argc = 1;
+	for (;;) {
+		ch = getnonblank();
+		if (ch == '\n') break;
+		if (ch == EOF) break;
+
+		argv[argc] = &line[len];
+		if (argc >= (MAXARGS-1)) {
+			fputs( "too many arguments", stdout );
+		} else {
+			argc++;
+		}
+		line[len] = ch;
+		if (len >= (LINELEN-1)) {
+			fputs( "line too long", stdout );
+		} else {
+			len++;
+		}
+
+		for (;;) { 
+			ch  = getchar();
+			if (ch == '\n') break;
+			if (ch == EOF) break;
+			if (ch <= ' ') break;
+
+			line[len] = ch;
+			if (len >= (LINELEN-1)) {
+				fputs( "line too long", stdout );
+			} else {
+				len++;
+			}
+		}
+
+		line[len] = '\0';
+		if (len >= (LINELEN-1)) {
+			fputs( "line too long", stdout );
+		} else {
+			len++;
+		}
+
+		if (ch == '\n') break;
+		if (ch == EOF) break;
+	}
+	argv[argc] = NULL;
+
+	if ((argc == 0) && (ch == EOF)) return -1;
+	return argc;
+}
+
+
+const char *argp_program_version = "1.0";
+const char *argp_program_bug_address = "<vak34@gmail.com>";
+static char doc[] = "This is MOS Technology 6510 simulator in debug mode.";
+static char args_doc[] = " ";
+static struct argp_option options[] = {
+    {"breakpoint", 'b', "address", 0, "Set a breakpoint",0},
+    {"delete", 'd', "address", 0, "Delete breakpoint",0},
+    {"ls", 'l', 0, 0, "List of breakpoints",0},
+    {"continue", 'c', 0, 0, "Continue",0},
+    {"exit", 'e', 0, 0, "Exit",0},
+    {"run", 'r', 0, 0, "Run",0},
+    {"print", 'p', "Memory location", 0, "Print contents of the memory location", 0},
+    {0}
+};
+
+struct arguments {
+    int print;
+    int special;
+    uint16_t content;
+    char *a;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+    struct arguments *arguments = state->input;
+    switch (key) {
+    case 'b': ;
+        char *end_ptr;
+        int adr = strtoul(arg, &end_ptr, 16);
+        if(arg != end_ptr && adr < 0x10000 && adr >= 0x0)
+        {
+            brk[(uint16_t) adr] = true;
+            printf("Breakpoint set at 0x%s\n", arg);
+        }
+        else
+        {
+            printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", arg);
+        }
+        break;
+    case 'd': ;
+        end_ptr = NULL;
+        adr = strtoul(arg, &end_ptr, 16);
+        if(arg != end_ptr && adr < 0x10000 && adr >= 0x0)
+        {
+            brk[(uint16_t) adr] = false;
+            printf("Breakpoint removed at 0x%s\n", arg);
+        }
+        else
+        {
+            printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", arg);
+        }
+        break;
+    case 'c': bp = 0; break;
+    case 'e': exit(0); break;
+    case 'l':
         printf("Breakpoint list: \n");
         for(int i = 0x0000; i <= 0xFFFF; i++)
         {
             if(brk[i]) printf("0x%04X\n", i);
         }
-        *bp = 1;
-        return;
-    } else
-        if(line[0] == 'b')
+        break;
+    case 'r': 
+        bp = 0;
+        for(int i = 0x0000; i <= 0xFFFF; i++)
+            brk[i] = false;
+        break;
+    case 'p': ;
+        arguments->print = 1;
+        if(strcmp("x", arg)== 0 || strcmp("X", arg)== 0) arguments->content = 1; else
+        if(strcmp("y", arg)== 0 || strcmp("Y", arg)== 0) arguments->content = 2; else
+        if(strcmp("a", arg)== 0 || strcmp("A", arg)== 0) arguments->content = 3; else
+        if(strcmp("sp", arg)== 0 || strcmp("SP", arg)== 0) arguments->content = 4; else
+        if(strcmp("f", arg)== 0 || strcmp("F", arg)== 0) arguments->content = 5; else
+        if(strcmp("h", arg)== 0 || strcmp("H", arg)== 0) arguments->content = 6; else
+        if(strcmp("l", arg)== 0 || strcmp("L", arg)== 0) arguments->content = 7; else
         {
-            char adr_str[5] = {line[2], line[3], line[4], line[5], '\0'};
-            char *end_ptr;
-            //printf("\n 1 \n");
-            adr = (uint16_t) strtoul(adr_str, &end_ptr, 16);
-            //printf("\n 2 : 0x%x\n", adr);
-            if((end_ptr == adr_str))
-            {
-                printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", adr_str);
-            }
-            else 
-            {
-                brk[adr] = true;
-                printf("Breakpoint set at 0x%s\n", adr_str);
-            }
-            *bp = 1;
-            return;
-        } else
-            if(line[0] == 'd')
-            {
-                char adr_str[5] = {line[2], line[3], line[4], line[5], '\0'};
-                char *end_ptr;
-                adr = (uint16_t) strtol(adr_str, &end_ptr, 16);
-                if((end_ptr == adr_str))
-                {
-                    printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", optarg);
-                }
-                else
-                {
-                    brk[adr] = false;
-                    printf("Breakpoint removed at 0x%s\n", adr_str);
-                }
-                *bp = 1;
-                return;            
-            } else
-                if(line[0] == 'c')
-                {
-                    *bp = 0;
-                    return;
-                } else
-                    if(line[0] == 'p')
-                    {
-                        switch(line[2])
-                        {
-                            case 'X': printf("X : %d\n", exec_s.regs.x); break;
-                            case 'Y': printf("Y : %d\n", exec_s.regs.y); break;
-                            case 'A': printf("Acc : %d\n", exec_s.regs.acc); break;
-                            case 'S': printf("S : %d\n", exec_s.regs.sp); break;
-                            case 'F': printf("F : %d\n", exec_s.regs.f); break;
-                            case 'H': printf("PCH : %d\n", exec_s.regs.pch); break;
-                            case 'L': printf("PCL : %d\n", exec_s.regs.pcl); break;
-                            default: ;
-                                char adr_str[5] = {line[2], line[3], line[4], line[5], '\0'};
-                                char *end_ptr;
-                                adr = (uint16_t) strtol(adr_str, &end_ptr, 16);
-                                if((end_ptr == adr_str))
-                                {
-                                    printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", optarg);
-                                }
-                                else
-                                {
-                                    printf("Memory content at 0x%x is %x\n", adr, exec_s.mem_map[adr]);
-                                }
-                        }
-                        *bp = 1;
-                        return;
-                    } else
-                    {
-                        printf("REEEEEE\n");
-                        *bp = 1;
-                        return;
-                    }
+            arguments->special = 1;
+            arguments->a = arg;
+        }
+        break;
+    case ARGP_KEY_ARG: return 0;
+    default: return ARGP_ERR_UNKNOWN;
+    }   
+    return 0;
 }
+
+static struct argp argp = { options, parse_opt, args_doc, doc, 0, 0, 0 };
 
 void routine(bool debug, es exec_s)
 {
     if(debug)
     {
-        int bp = 1;
         while(1)
         {
-            char *line;
             while(bp)
             {
                 printf("dbg> ");
-                size_t len = 0;
-                ssize_t nread;
-                nread = getline(&line, &len, stdin);
-                //printf("Line: %s", line);
-                if(nread == -1)
-                {
-                    printf("Oi, something went wrong\n");
-                    exit(-1);
+                char argv_buf[512];
+                int ac;
+                char * av[MAXARGS];
+                ac = get_args(av, argv_buf);
+                struct arguments arguments;
+                arguments.print = 0;
+                arguments.content = 0;
+                arguments.special = 0;
+                arguments.a = "";
+                argp_parse (&argp, ac, av, 0, 0, &arguments);
+                if(arguments.print){
+                    if(arguments.special){
+                        char *end_ptr = NULL;
+                        int adr = strtoul(arguments.a, &end_ptr, 16);
+                        if(arguments.a != end_ptr && adr < 0x10000 && adr >= 0x0)
+                        {
+                            printf("Memory content of 0x%X -- 0x%x\n", adr, exec_s.mem_map[adr]);
+                        }
+                        else
+                        {
+                        printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", arguments.a);
+                        }
+                    }
+                    else
+                    {
+                        switch(arguments.content){
+                            case 1: ;
+                            printf("x: 0x%x\n", exec_s.regs.x);
+                            break;
+                            case 2: ;
+                            printf("y: 0x%x\n", exec_s.regs.y);
+                            break;
+                            case 3: ;
+                            printf("a: 0x%x\n", exec_s.regs.acc);
+                            break;
+                            case 4: ;
+                            printf("sp: 0x%x\n", exec_s.regs.sp);
+                            break;
+                            case 5: ;
+                            printf("f: 0x%x\n", exec_s.regs.f);
+                            break;
+                            case 6: ;
+                            printf("pc high byte: 0x%x\n", exec_s.regs.pch);
+                            break;
+                            case 7: ;
+                            printf("pc low byte: 0x%x\n", exec_s.regs.pcl);
+                            break;
+                            default:
+                            printf("Wrong memory location\n");
+                        }
+                    }
                 }
-                comd_line_stub(line, &bp, exec_s);
             }
             if(brk[pc(exec_s.regs)])
             {
