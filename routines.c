@@ -294,6 +294,7 @@ static struct argp_option options[] = {
     {"exit", 'e', 0, 0, "Exit",0},
     {"run", 'r', 0, 0, "Run",0},
     {"print", 'p', "Memory location", 0, "Print contents of the memory location", 0},
+    {"stepbystep", 's', 0, 0, "Step-by-step mode", 0},
     {0}
 };
 
@@ -302,6 +303,7 @@ struct arguments {
     int special;
     uint16_t content;
     char *a;
+    int step;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
@@ -344,6 +346,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         break;
     case 'r': 
         bp = 0;
+        arguments->step = 0;
         for(int i = 0x0000; i <= 0xFFFF; i++)
             brk[i] = false;
         break;
@@ -361,6 +364,11 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             arguments->a = arg;
         }
         break;
+    case 's': ;
+        printf("Step-by-step mode enabled\n");
+        arguments->step = 1;
+        bp = 0;
+        break;
     case ARGP_KEY_ARG: return 0;
     default: return ARGP_ERR_UNKNOWN;
     }   
@@ -373,6 +381,7 @@ void routine(bool debug, es exec_s)
 {
     if(debug)
     {
+        int step;
         while(1)
         {
             while(bp)
@@ -387,6 +396,7 @@ void routine(bool debug, es exec_s)
                 arguments.content = 0;
                 arguments.special = 0;
                 arguments.a = "";
+                arguments.step = 0;
                 argp_parse (&argp, ac, av, 0, 0, &arguments);
                 if(arguments.print){
                     if(arguments.special){
@@ -430,9 +440,14 @@ void routine(bool debug, es exec_s)
                         }
                     }
                 }
+                if(arguments.step && bp == 0){
+                    step = 1;
+                    break;
+                }
             }
-            if(brk[pc(exec_s.regs)])
+            if(brk[pc(exec_s.regs)] || step)
             {
+                if(step) printf("Next step. ");
                 bp = 1;
                 printf("Breakpoint 0x%x. FC, what do? \n", pc(exec_s.regs));
             }
