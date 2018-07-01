@@ -1,6 +1,3 @@
-
-//extern change_pc(rf exec_s->regs, uint8_t offset, bool sign);
-// TODO: evaluate add, substract, carry and overflow flags
 void ORA(es *exec_s)
 {
 	exec_s->regs.acc |= *exec_s->data;
@@ -28,11 +25,15 @@ void EOR(es *exec_s)
 void ADC(es *exec_s)
 {
 	int16_t acc_val = (int16_t) exec_s->regs.acc; // & 0x7F;
-    //printf("Accumulator content = 0x%X;\n", exec_s->regs.acc);
-    //printf("exec_s->data = 0x%X;\n", *exec_s->data);
+    #ifdef DEBUG
+        printf("Accumulator content = 0x%X;\n", exec_s->regs.acc);
+        printf("exec_s->data = 0x%X;\n", *exec_s->data);
+    #endif
 	int16_t mem_val = (int16_t) *exec_s->data; // & 0x7F;
-    //printf("Memory content = 0x%X;\n", mem_val);
-	if(check_bit(exec_s->regs.f, CARRY)) acc_val++;
+    #ifdef DEBUG
+    printf("Memory content = 0x%X;\n", mem_val);
+    #endif
+    if(check_bit(exec_s->regs.f, CARRY)) acc_val++;
     int16_t result = acc_val + mem_val;
     exec_s->regs.acc = (int8_t) (result & 0xFF);
     if((acc_val^result)&(mem_val^result)&0x80) set_overflow(exec_s->regs.f);
@@ -42,16 +43,22 @@ void ADC(es *exec_s)
 	set_zero(exec_s->regs.f, exec_s->regs.acc);
 	set_neg(exec_s->regs.f, exec_s->regs.acc);
 	change_pc(&(exec_s->regs), exec_s->pc_incr, 0);
-    //printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #ifdef DEBUG
+    printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #endif
 }
 
 void SBC(es *exec_s)
 {
     int16_t acc_val = (int16_t) exec_s->regs.acc; // & 0x7F;
-    //printf("Accumulator content = 0x%X;\n", exec_s->regs.acc);
-    //printf("exec_s->data = 0x%X;\n", *exec_s->data);
+    #ifdef DEBUG
+        printf("Accumulator content = 0x%X;\n", exec_s->regs.acc);
+        printf("exec_s->data = 0x%X;\n", *exec_s->data);
+    #endif
 	int16_t mem_val = (int16_t) *exec_s->data; // & 0x7F;
-    //printf("Memory content = 0x%X;\n", mem_val);
+    #ifdef DEBUG
+    printf("Memory content = 0x%X;\n", mem_val);
+    #endif
     if(!check_bit(exec_s->regs.f, CARRY)) acc_val--;
     int16_t result = acc_val - mem_val;
     exec_s->regs.acc = (int8_t) (result & 0xFF);
@@ -62,7 +69,9 @@ void SBC(es *exec_s)
     set_zero(exec_s->regs.f, exec_s->regs.acc);
 	set_neg(exec_s->regs.f, exec_s->regs.acc);
 	change_pc(&(exec_s->regs), exec_s->pc_incr, 0);
-    //printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #ifdef DEBUG
+    printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #endif
 }
 
 void CMP(es *exec_s)
@@ -337,7 +346,9 @@ void BEQ(es *exec_s)
 {
 	if(check_bit(exec_s->regs.f, ZERO)) change_pc(&(exec_s->regs), exec_s->pc_incr, 0);
 	else change_pc(&(exec_s->regs), ((*exec_s->data) & 0x7F), check_bit((*exec_s->data), NEGATIVE));
-    //printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #ifdef DEBUG
+    printf("Next pc = 0x%X\n", pc(exec_s->regs));
+    #endif
 }
 
 void BRK(es *exec_s)

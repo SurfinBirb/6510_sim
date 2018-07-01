@@ -1,12 +1,22 @@
 #define _GNU_SOURCE
 #define MAXARGS 128
 #define LINELEN 256
+#define CARRY 0
+#define ZERO 1
+#define IRQ 2
+#define DECIMAL 3
+#define BREAK 4
+#define OVERFLOW 6
+#define NEGATIVE 7
 #include <getopt.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <fcntl.h>
 #include <argp.h>
+
+
 
 uint16_t pc(rf regs)
 {
@@ -124,14 +134,18 @@ void decode(es *exec_s)
 {
     uint8_t *mem_map = exec_s->mem_map;
     am mode = instr_set[exec_s->regs.ir].addressing;
-    //printf("Instruction opcode = 0x%X; Mnemonic: %s\n", exec_s->regs.ir, instr_set[exec_s->regs.ir].mnemonic);
-    //printf("Addressing mode: %s\n", get_mode_name(mode));
+    #ifdef DEBUG
+    printf("Instruction opcode = 0x%X; Mnemonic: %s\n", exec_s->regs.ir, instr_set[exec_s->regs.ir].mnemonic);
+    printf("Addressing mode: %s\n", get_mode_name(mode));
+    #endif
     uint16_t high, low, ptr;
     switch (mode)
     {
         case immediate: ;
             exec_s->data = &mem_map[pc(exec_s->regs) + 1];
-            //printf("Operand = 0x%X;\n", mem_map[pc(exec_s->regs) + 1]);
+            #ifdef DEBUG
+            printf("Operand = 0x%X;\n", mem_map[pc(exec_s->regs) + 1]);
+            #endif
             exec_s->pc_incr = 2;
             break;
         case absolute: ;
@@ -293,6 +307,7 @@ static struct argp_option options[] = {
     {"continue", 'c', 0, 0, "Continue",0},
     {"exit", 'e', 0, 0, "Exit",0},
     {"run", 'r', 0, 0, "Run",0},
+    {"instruction", 'i', 0, 0, "Print last instruction", 0},
     {"print", 'p', "Memory location", 0, "Print contents of the memory location", 0},
     {"stepbystep", 's', 0, 0, "Step-by-step mode", 0},
     {0}
@@ -301,9 +316,11 @@ static struct argp_option options[] = {
 struct arguments {
     int print;
     int special;
+    int c;
     uint16_t content;
     char *a;
     int step;
+    es exec_s;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
@@ -335,8 +352,17 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             printf("%s is not a valid address (set address in 0x0000 - 0xFFFF range)\n", arg);
         }
         break;
-    case 'c': bp = 0; break;
+    case 'c': bp = 0; arguments->c = 1; break;
     case 'e': exit(0); break;
+    case 'i': ;
+        es exec_s = arguments->exec_s;
+        am mode = instr_set[exec_s.mem_map[pc(exec_s.regs)]].addressing;
+        printf("pc = 0x%x\n", pc(exec_s.regs));
+        printf("Instruction opcode = 0x%X; Mnemonic: %s\n", exec_s.mem_map[pc(exec_s.regs)], instr_set[exec_s.mem_map[pc(exec_s.regs)]].mnemonic);
+        printf("Addressing mode: %s\n", get_mode_name(mode));
+        printf("[0x%x] 0x%x\n", pc(exec_s.regs)+1, exec_s.mem_map[pc(exec_s.regs)+1]);
+        printf("[0x%x] 0x%x\n", pc(exec_s.regs)+2, exec_s.mem_map[pc(exec_s.regs)+2]);
+        break;
     case 'l':
         printf("Breakpoint list: \n");
         for(int i = 0x0000; i <= 0xFFFF; i++)
@@ -346,6 +372,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         break;
     case 'r': 
         bp = 0;
+        arguments->c = 1;
         arguments->step = 0;
         for(int i = 0x0000; i <= 0xFFFF; i++)
             brk[i] = false;
@@ -368,6 +395,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         printf("Step-by-step mode enabled\n");
         arguments->step = 1;
         bp = 0;
+        arguments->c = 0;
         break;
     case ARGP_KEY_ARG: return 0;
     default: return ARGP_ERR_UNKNOWN;
@@ -382,6 +410,7 @@ void routine(bool debug, es exec_s)
     if(debug)
     {
         int step;
+        int c = 1;
         while(1)
         {
             while(bp)
@@ -397,7 +426,10 @@ void routine(bool debug, es exec_s)
                 arguments.special = 0;
                 arguments.a = "";
                 arguments.step = 0;
+                arguments.c = 0;
+                arguments.exec_s = exec_s;
                 argp_parse (&argp, ac, av, 0, 0, &arguments);
+                c = arguments.c;
                 if(arguments.print){
                     if(arguments.special){
                         char *end_ptr = NULL;
@@ -440,10 +472,17 @@ void routine(bool debug, es exec_s)
                         }
                     }
                 }
-                if(arguments.step && bp == 0){
+                if(arguments.step && bp == 0)
+                {
                     step = 1;
                     break;
                 }
+            }
+            if(c)
+            {
+                fetch(&exec_s);
+                decode(&exec_s);
+                execute(&exec_s);
             }
             if(brk[pc(exec_s.regs)] || step)
             {
@@ -451,9 +490,6 @@ void routine(bool debug, es exec_s)
                 bp = 1;
                 printf("Breakpoint 0x%x. FC, what do? \n", pc(exec_s.regs));
             }
-            fetch(&exec_s);
-            decode(&exec_s);
-            execute(&exec_s);
         }
     }
     else
