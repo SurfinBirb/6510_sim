@@ -1,0 +1,50 @@
+0000                          ;THIS SUBROUTINE ARRANGES THE 8-BIT ELEMENTS OF A LIST IN ASCENDING
+0000                          ;ORDER.  THE STARTING ADDRESS OF THE LIST IS IN LOCATIONS $30 AND
+0000                          ;$31.  THE LENGTH OF THE LIST IS IN THE FIRST BYTE OF THE LIST.  LOCATION
+0000                          ;$32 IS USED TO HOLD AN EXCHANGE FLAG.
+0000                          .ORG   $0000   
+0000   A0 00        SORT8:    LDY   #$00   
+0002   84 2C                  STY   $2c   
+0004   B1 2A                  LDA   ($2a),Y   ;FETCH ELEMENT COUNT
+0006   AA                     TAX   ; AND PUT IT INTO X
+0007   C8                     INY   ;POINT TO FIRST ELEMENT IN LIST
+0008   CA                     DEX   ;DECREMENT ELEMENT COUNT
+0009   B1 2A        NXTEL:    LDA   ($2a),Y   
+000B   C8                     INY   
+000C   D1 2A                  CMP   ($2a),Y   ;IS IT LARGER THAN THE NEXT ELEMENT?
+000E   90 12                  BCC   CHKEND   
+0010   F0 10                  BEQ   CHKEND   
+0012                          ;YES. EXCHANGE ELEMENTS IN MEMORY
+0012   85 2D                  STA   $002d   ; BY SAVING LOW BYTE.
+0014   B1 2A                  LDA   ($2a),Y   ; THEN GET HIGH BYTE AND
+0016   88                     DEY   ; STORE IT AT LOW ADDRESS
+0017   91 2A                  STA   ($2a),Y   
+0019   A5 2D                  LDA   $002d   ;PULL LOW BYTE
+001B   C8                     INY   ; AND STORE IT AT HIGH ADDRESS
+001C   91 2A                  STA   ($2a),Y   
+001E   A9 FF                  LDA   #$FF   ;TURN EXCHANGE FLAG ON (= -1)
+0020   85 2C                  STA   $2c   
+0022   CA           CHKEND:   DEX   
+0023   D0 E4                  BNE   NXTEL   ;NO. FETCH NEXT ELEMENT
+0025   24 2C                  BIT   $2c   ;YES. EXCHANGE FLAG STILL OFF?
+0027   30 D7                  BMI   SORT8   ;NO. GO THROUGH LIST AGAIN
+0029   60                     RTS   ;YES. LIST IS NOW ORDERED
+002A                          ; 
+002A   02                     DB   2e   
+002B   00                     DB   00   
+002C   00                     DB   00   
+002D   00                     DB   00   
+002E   04                     DB   4   
+002F   08                     DB   8   
+0030   05                     DB   5   
+0031   07                     DB   7   
+0032   04                     DB   4   
+
+
+SORT8:              0000 DEFINED AT LINE 7
+                    > USED AT LINE 31
+NXTEL:              0009 DEFINED AT LINE 13
+                    > USED AT LINE 29
+CHKEND:             0022 DEFINED AT LINE 28
+                    > USED AT LINE 16
+                    > USED AT LINE 17
