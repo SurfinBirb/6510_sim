@@ -28,80 +28,80 @@ uint16_t sp(rf regs)
     return (0x0100 + regs.sp);
 }
 
-void set_bit(uint8_t number, uint8_t n)
+void set_bit(uint8_t *number, uint8_t n)
 {
-    number |= 0x01 << n;
+    *number |= 0x01 << n;
 }
 
-void clear_bit(uint8_t number, uint8_t n)
+void clear_bit(uint8_t *number, uint8_t n)
 {
-    number &= ~(0x01 << n);
+    *number &= ~(0x01 << n);
 }
 
-bool check_bit(uint8_t flags, uint8_t m)
+bool check_bit(uint8_t *flags, uint8_t m)
 {
-    return (flags & (0x01 << m));
+    return (*flags & (0x01 << m));
 }
 
-void set_zero(uint8_t flags, uint8_t m)
+void set_zero(uint8_t *flags, uint8_t m)
 {
     if(m == 0x00) set_bit(flags, ZERO);
     else clear_bit(flags, ZERO);
 }
 
-void set_neg(uint8_t flags, uint8_t m)
+void set_neg(uint8_t *flags, uint8_t m)
 {
     if((m & 128) == 128) set_bit(flags, NEGATIVE);
     else clear_bit(flags, NEGATIVE);
 }
 
-void irq_disable(uint8_t flags)
+void irq_disable(uint8_t *flags)
 {
     set_bit(flags, IRQ);
 }
 
-void irq_enable(uint8_t flags)
+void irq_enable(uint8_t *flags)
 {
     clear_bit(flags, IRQ);
 }
 
-void set_carry(uint8_t flags)
+void set_carry(uint8_t *flags)
 {
     set_bit(flags, CARRY);
 }
 
-void clear_carry(uint8_t flags)
+void clear_carry(uint8_t *flags)
 {
     clear_bit(flags, CARRY);
 }
 
-void set_decimal(uint8_t flags)
+void set_decimal(uint8_t *flags)
 {
     set_bit(flags, DECIMAL);
 }
 
-void clear_decimal(uint8_t flags)
+void clear_decimal(uint8_t *flags)
 {
     clear_bit(flags, DECIMAL);
 }
 
-void set_overflow(uint8_t flags)
+void set_overflow(uint8_t *flags)
 {
     clear_bit(flags, OVERFLOW);
 }
 
-void clear_overflow(uint8_t flags)
+void clear_overflow(uint8_t *flags)
 {
     clear_bit(flags, OVERFLOW);
 }
 
-void change_pc(rf *regs, uint16_t offset, bool sign)
+void change_pc(rf *regs, uint16_t offset)
 {
     uint16_t pc_reg = pc(*regs);
-    if(sign) pc_reg -= offset;
-    else pc_reg += offset;
+    //if(sign) pc_reg -= offset;
+    //pc_reg += offset;
     regs->pch = pc_reg >> 8;
-    regs->pcl = pc_reg;
+    regs->pcl = (pc_reg + offset) & 0xFF;
 }
 
 void fetch(es *exec_s)
@@ -174,8 +174,8 @@ void decode(es *exec_s)
         exec_s->pc_incr = 2;
         break;
         case indirect_y: ;
-        ptr = mem_map[pc(exec_s->regs) + 1];
-        low = mem_map[ptr] + exec_s->regs.y; // carry is saved
+        ptr = mem_map[pc(exec_s->regs) + 1]; // fetch zp address
+        low = mem_map[ptr] + exec_s->regs.y; // carry is saved 
         high = mem_map[ptr + 1];
         exec_s->data = &mem_map[(high << 8) + low];
         exec_s->pc_incr = 2;
